@@ -28,7 +28,6 @@ HOMEWORK_VERDICTS = {
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-logger.setLevel(logging.DEBUG)
 formatter = logging.Formatter(
     '%(asctime)s, %(levelname)s, %(message)s')
 handler = logging.StreamHandler()
@@ -55,7 +54,7 @@ def send_message(bot, message):
     try:
         logger.debug('Попытка отправить сообщение в Telegram отправлено.')
         bot.send_message(TELEGRAM_CHAT_ID, message)
-        logger.info('Сообщение в Telegram успешно отправлено.')
+        logger.debug('Сообщение в Telegram успешно отправлено.')
     except Exception:
         raise logger.error('Не удалось отправить сообщение в Telegram.')
 
