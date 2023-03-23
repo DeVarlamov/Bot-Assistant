@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import time
 from http import HTTPStatus
 
@@ -29,34 +30,35 @@ HOMEWORK_VERDICTS = {
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 formatter = logging.Formatter(
-    '%(asctime)s, %(levelname)s, %(message)s')
-handler = logging.StreamHandler()
+    '%(asctime)s, %(levelname)s, %(message)s, %(funcName)s, %(lineno)d')
+handler = logging.StreamHandler(sys.stderr)
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 
 def check_tokens():
     """Функция проверки наличия токена и чат id телеграмма."""
-    tokens = {
-        'SECRET_PRACTICUM_TOKEN': PRACTICUM_TOKEN,
-        'SECRET_TELEGRAM_TOKEN': TELEGRAM_TOKEN,
-        'SECRET_TELEGRAM_CHAT_ID': TELEGRAM_CHAT_ID
-    }
-    for key, value in tokens.items():
-        if value is None:
-            logging.error(f'{key} отсутствует')
-            return False
+    if PRACTICUM_TOKEN is None:
+        logging.critical('PRACTICUM_TOKEN не найден')
+        return sys.exit('бот завершил работу')
+    if TELEGRAM_CHAT_ID is None:
+        logging.critical('TELEGRAM_CHAT_ID не найден')
+        return sys.exit('бот завершил работу')
+    if TELEGRAM_TOKEN is None:
+        logging.critical('TELEGRAM_TOKEN не найден')
+        return sys.exit('бот завершил работу')
     return True
 
 
 def send_message(bot, message):
     """Отправляет сообщение `message` в указанный telegram-чат."""
+    logger.debug('Попытка отправить сообщение в Telegram.')
     try:
-        logger.debug('Попытка отправить сообщение в Telegram отправлено.')
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.debug('Сообщение в Telegram успешно отправлено.')
-    except Exception:
-        raise logger.error('Не удалось отправить сообщение в Telegram.')
+    except telegram.TelegramError as error:
+        logger.error(
+            f'Не удалось отправить сообщение в Telegram. {error}')
 
 
 def get_api_answer(current_timestamp):
@@ -67,25 +69,19 @@ def get_api_answer(current_timestamp):
         homework_statuses = requests.get(ENDPOINT,
                                          headers=HEADERS,
                                          params=params)
-    except Exception as error:
-        raise SystemError(f'Ошибка получения request, {error}')
+    except requests.RequestException as error:
+        raise ConnectionError(f'запрос не может быть выполнен, {error}')  #тут что то надо
+    if homework_statuses.status_code == HTTPStatus.OK:
+        logger.info('успешное получение Эндпоинта')  # тут что то надо
+        homework = homework_statuses.json()
+        return homework
+    elif homework_statuses.status_code == HTTPStatus.REQUEST_TIMEOUT:
+        raise SystemError(f'Ошибка код {homework_statuses.status_code}')
+    elif homework_statuses.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
+        raise SystemError(f'Ошибка код {homework_statuses.status_code}')
     else:
-        if homework_statuses.status_code == HTTPStatus.OK:
-            logger.info('успешное получение Эндпоинта')
-            homework = homework_statuses.json()
-            if 'error' in homework:
-                raise SystemError(f'Ошибка json, {homework["error"]}')
-            elif 'code' in homework:
-                raise SystemError(f'Ошибка json, {homework["code"]}')
-            else:
-                return homework
-        elif homework_statuses.status_code == HTTPStatus.REQUEST_TIMEOUT:
-            raise SystemError(f'Ошибка код {homework_statuses.status_code}')
-        elif homework_statuses.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
-            raise SystemError(f'Ошибка код {homework_statuses.status_code}')
-        else:
-            raise SystemError(
-                f'Недоступен Эндпоинт, код {homework_statuses.status_code}')
+        raise SystemError(
+            f'Недоступен Эндпоинт, код {homework_statuses.status_code}')
 
 
 def check_response(response):
@@ -126,12 +122,9 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы бота."""
-    if not check_tokens():
-        raise logger.critical('Программа закончила работу')
-    else:
-        check_tokens()
-        bot = telegram.Bot(token=TELEGRAM_TOKEN)
-        timestamp = int(time.time()) - RETRY_PERIOD
+    check_tokens()
+    bot = telegram.Bot(token=TELEGRAM_TOKEN)
+    timestamp = int(time.time()) - RETRY_PERIOD
 
     while True:
         try:
