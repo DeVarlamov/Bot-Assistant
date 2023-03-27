@@ -139,7 +139,7 @@ def main():
             if homeworks:
                 message = parse_status(homeworks[0])
             else:
-                message = 'Нет новых статусов'
+                message = 'Нет новых статусов.'
             if message != last_message:
                 send_message(bot, message)
                 last_message = message
