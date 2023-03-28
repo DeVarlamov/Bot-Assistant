@@ -31,24 +31,19 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 formatter = logging.Formatter(
     '%(asctime)s, %(levelname)s, %(message)s, %(funcName)s, %(lineno)d')
-handler = logging.StreamHandler(sys.stderr)
+handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 
 def check_tokens():
     """Функция проверки наличия токена и чат id телеграмма."""
-    tokens_message = 'бот завершил работу'
-    if PRACTICUM_TOKEN is None:
-        logger.critical('PRACTICUM_TOKEN не найден')
-        return sys.exit(tokens_message)
-    if TELEGRAM_CHAT_ID is None:
-        logger.critical('TELEGRAM_CHAT_ID не найден')
-        return sys.exit(tokens_message)
-    if TELEGRAM_TOKEN is None:
-        logger.critical('TELEGRAM_TOKEN не найден')
-        return sys.exit(tokens_message)
-    return True
+    logger.debug('Проверка токеннов')
+    tokens = (PRACTICUM_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_TOKEN)
+    if not all(tokens):
+        logger.critical('Все токены не найдены')
+        sys.exit('Бот закончил работу проверьте tokens')
+    logger.debug('Проверка tokens успешна')
 
 
 def send_message(bot, message):
@@ -70,34 +65,32 @@ def get_api_answer(current_timestamp):
         'headers': HEADERS,
         'params': {'from_date': timestamp},
     }
-    message = ('Начало запроса к API. Запрос: {url}, {headers}, {params}.'
+    message = ('Начало запроса к API. Запрос: {url}, {params}.'
                ).format(**params_request)
-    logger.info(message)
+    logger.debug(message)
     try:
         homework_statuses = requests.get(**params_request)
     except requests.RequestException as error:
         raise ConnectionError(f'запрос не может быть выполнен, {error}'
-                              f'Ответ API не возвращает 200. '
                               f'Причина: {homework_statuses.reason}.'
                               f'Текст: {homework_statuses.text}.'
                               )
-    if homework_statuses.status_code == HTTPStatus.OK:
-        message = ('успешное получение API. {url}, {headers}, {params}.'
+    if homework_statuses.status_code != HTTPStatus.OK:
+        message = ('не успешное получение API. {url}, {params}.'
                    ).format(**params_request)
-        logger.info(message)
-        return homework_statuses.json()
-    elif homework_statuses.status_code == HTTPStatus.REQUEST_TIMEOUT:
-        raise SystemError(f'Ошибка код {homework_statuses.status_code}')
-    elif homework_statuses.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
-        raise SystemError(f'Ошибка код {homework_statuses.status_code}')
-    else:
+        logger.error(message)
         raise ValueError(
             f'Недоступен {ENDPOINT} , код {homework_statuses.status_code}')
+    else:
+        message = ('успешное получение API. {url}, {params}.'
+                   ).format(**params_request)
+        logger.debug(message)
+        return homework_statuses.json()
 
 
 def check_response(response):
     """Функция проверки корректности ответа API Яндекс.Практикум."""
-    logger.info('Проверка ответа API на корректность')
+    logger.debug('Проверка ответа API на корректность')
     if not isinstance(response, dict):
         raise TypeError('Ответ API не является dict')
     if 'homeworks' not in response or 'current_date' not in response:
@@ -110,11 +103,11 @@ def check_response(response):
 
 def parse_status(homework):
     """Функция, проверяющая статус домашнего задания."""
-    logger.info('Проводим проверки и извлекаем статус работы')
+    logger.debug('Проводим проверки и извлекаем статус работы')
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
     if 'homework_name' not in homework:
-        raise KeyError('Нет ключа homework_name в ответе API')
+        raise KeyError('Нет ключа homework_name в ответе API ')
     if homework_status not in HOMEWORK_VERDICTS:
         raise ValueError(f'Неизвестный статус работы - {homework_status}')
     return ('Изменился статус проверки работы "{homework_name}". {verdict}'
